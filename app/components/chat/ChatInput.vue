@@ -1,51 +1,62 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { Plus, ArrowUp, X } from 'lucide-vue-next'
+  import { ref, watch, onUnmounted } from 'vue'
+  import { Plus, ArrowUp, X } from 'lucide-vue-next'
 
-const emit = defineEmits<{
-  send: [message: string, images: File[]]
-}>()
+  const emit = defineEmits<{
+    send: [message: string, images: File[]]
+  }>()
 
-const message = ref('')
-const images = ref<File[]>([])
+  const message = ref('')
+  const images = ref<File[]>([])
+  const imageUrls = ref<string[]>([])
+  const fileInput = ref<HTMLInputElement | null>(null)
 
-const fileInput = ref<HTMLInputElement | null>(null)
+  function openFilePicker() {
+    fileInput.value?.click()
+  }
 
-function openFilePicker() {
-  fileInput.value?.click()
-}
+  function handleFiles(event: Event) {
+    const input = event.target as HTMLInputElement
 
-function handleFiles(event: Event) {
-  const input = event.target as HTMLInputElement
+    if (!input.files) 
+          return
 
-  if (!input.files) 
-        return
+    const selectedFiles = Array.from(input.files)
 
-  const selectedFiles = Array.from(input.files)
+    images.value = [
+      ...images.value,
+      ...selectedFiles.filter(file =>
+        file.type.startsWith('image/')
+      )
+    ]
+    input.value = ''
+  }
 
-  images.value.push(
-    ...selectedFiles.filter(file =>
-      file.type.startsWith('image/')
+  function removeImage(index: number) {
+    images.value = images.value.filter((_, i) => i !== index)
+  }
+
+  function sendMessage() {
+    const text = message.value.trim()
+
+    if (!text && images.value.length === 0) return
+
+    emit('send', text, [...images.value])
+
+    message.value = ''
+    images.value = []
+  }
+
+  watch(images, (files) => {
+    imageUrls.value.forEach(url => URL.revokeObjectURL(url))
+    imageUrls.value = files.map(file => 
+      URL.createObjectURL(file)
     )
-  )
+  })
 
-  input.value = ''
-}
-
-function removeImage(index: number) {
-  images.value.splice(index, 1)
-}
-
-function sendMessage() {
-  const text = message.value.trim()
-
-  if (!text && images.value.length === 0) return
-
-  emit('send', text, [...images.value])
-
-  message.value = ''
-  images.value = []
-}
+  onUnmounted(() => {
+    imageUrls.value.forEach(url => URL.revokeObjectURL(url))
+  })
 </script>
 
 <template>
@@ -53,21 +64,24 @@ function sendMessage() {
 
     <!-- Prévia dos arquivos -->
     <div
-      v-if="images.length"
-      class="mb-3 flex flex-wrap gap-2"
+      v-if="imageUrls.length"
+      class="mb-3 flex flex-wrap gap-3"
     >
       <div
-        v-for="(image, index) in images"
-        :key="index"
-        class="flex items-center gap-2 rounded-lg bg-zinc-700 px-3 py-2 text-xs"
+        v-for="(url, index) in imageUrls"
+        :key="url"
+        class="relative"
       >
-        <span class="max-w-32 truncate">
-          {{ image.name }}
-        </span>
+        <img
+          :src="url"
+          :alt="images[index]?.name || 'Imagem anexada'"
+          class="h-24 w-24 rounded-xl object-cover"
+        />
 
         <button
           type="button"
           aria-label="Remover imagem"
+          class="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-600 text-white hover:bg-zinc-500"
           @click="removeImage(index)"
         >
           <X :size="14" />
